@@ -1,6 +1,8 @@
 from urllib.parse import urlparse
 import ipaddress
 import re
+import math
+from collections import Counter
 
 
 SUSPICIOUS_KEYWORDS = [
@@ -20,30 +22,41 @@ SUSPICIOUS_KEYWORDS = [
 ]
 
 
-def extract_url_features(url):
-    """
-    Extract numerical security-related features from a URL.
-    """
+def calculate_entropy(text):
+    if not text:
+        return 0.0
 
-    # Convert to string and remove extra spaces
+    counts = Counter(text)
+    length = len(text)
+    entropy = 0.0
+
+    for count in counts.values():
+        probability = count / length
+        entropy -= probability * math.log2(probability)
+
+    return entropy
+
+
+def extract_url_features(url):
     url = str(url).strip()
 
-    # Some dataset URLs don't contain http:// or https://
-    # Add http:// temporarily so urlparse can identify the hostname.
+    # Make sure the URL has a scheme for parsing
     url_for_parsing = url
 
-    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", url_for_parsing):
+    if not re.match(
+        r"^[a-zA-Z][a-zA-Z0-9+.-]*://",
+        url_for_parsing
+    ):
         url_for_parsing = "http://" + url_for_parsing
 
     try:
         parsed = urlparse(url_for_parsing)
-        hostname = parsed.hostname or ""
-        path = parsed.path or ""
-        query = parsed.query or ""
     except Exception:
-        hostname = ""
-        path = ""
-        query = ""
+        parsed = urlparse("http://")
+
+    hostname = parsed.hostname or ""
+    path = parsed.path or ""
+    query = parsed.query or ""
 
     hostname = hostname.lower()
 
@@ -60,12 +73,17 @@ def extract_url_features(url):
     url_lower = url.lower()
 
     suspicious_keyword_count = sum(
-        1 for keyword in SUSPICIOUS_KEYWORDS
+        1
+        for keyword in SUSPICIOUS_KEYWORDS
         if keyword in url_lower
     )
 
-    # Estimate number of subdomains
+    # Count subdomains
     hostname_parts = hostname.split(".") if hostname else []
+
+    # Do not count "www" as a subdomain
+    if hostname_parts and hostname_parts[0] == "www":
+        hostname_parts = hostname_parts[1:]
 
     if len(hostname_parts) > 2:
         subdomain_count = len(hostname_parts) - 2
@@ -80,29 +98,52 @@ def extract_url_features(url):
     else:
         query_parameter_count = 0
 
-    # Build feature dictionary
+    # Domain-level features
+    domain_letter_count = sum(
+        char.isalpha() for char in hostname
+    )
+
+    domain_digit_count = sum(
+        char.isdigit() for char in hostname
+    )
+
+    domain_hyphen_count = hostname.count("-")
+
+    domain_special_char_count = len(
+        re.findall(r"[^a-zA-Z0-9.-]", hostname)
+    )
+
+    # Domain entropy
+    domain_entropy = calculate_entropy(hostname)
+
+    # Final 20 features
     features = {
         "url_length": len(url),
         "domain_length": len(hostname),
         "path_length": len(path),
-
         "dot_count": url.count("."),
         "slash_count": url.count("/"),
         "hyphen_count": url.count("-"),
         "underscore_count": url.count("_"),
-        "digit_count": sum(char.isdigit() for char in url),
-
+        "digit_count": sum(
+            char.isdigit() for char in url
+        ),
         "special_char_count": len(
             re.findall(r"[^a-zA-Z0-9]", url)
         ),
-
         "has_at": int("@" in url),
         "has_ip": has_ip,
-        "has_https": int(parsed.scheme.lower() == "https"),
-
+        "has_https": int(
+            parsed.scheme.lower() == "https"
+        ),
         "suspicious_keyword_count": suspicious_keyword_count,
         "subdomain_count": subdomain_count,
-        "query_parameter_count": query_parameter_count
+        "query_parameter_count": query_parameter_count,
+        "domain_letter_count": domain_letter_count,
+        "domain_digit_count": domain_digit_count,
+        "domain_hyphen_count": domain_hyphen_count,
+        "domain_special_char_count": domain_special_char_count,
+        "domain_entropy": domain_entropy
     }
 
     return features
