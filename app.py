@@ -4,8 +4,33 @@ import pandas as pd
 import numpy as np
 import cv2
 import html
+from urllib.parse import urlparse
 
 from src.feature_engineering import extract_url_features
+
+
+# =========================================================
+# TRUSTED DOMAINS
+# =========================================================
+
+TRUSTED_DOMAINS = {
+    "google.com",
+    "www.google.com",
+    "wikipedia.org",
+    "www.wikipedia.org",
+    "github.com",
+    "www.github.com",
+    "microsoft.com",
+    "www.microsoft.com",
+    "apple.com",
+    "www.apple.com",
+    "amazon.com",
+    "www.amazon.com",
+    "youtube.com",
+    "www.youtube.com",
+    "linkedin.com",
+    "www.linkedin.com",
+}
 
 
 # =========================================================
@@ -1288,11 +1313,17 @@ input {
 
 def prepare_features(features):
 
-    if isinstance(features, pd.DataFrame):
+    if isinstance(
+        features,
+        pd.DataFrame
+    ):
 
         feature_df = features.copy()
 
-    elif isinstance(features, dict):
+    elif isinstance(
+        features,
+        dict
+    ):
 
         feature_df = pd.DataFrame(
             [features]
@@ -1329,7 +1360,6 @@ def prepare_features(features):
 
 # =========================================================
 # RISK SCORE
-# SAME LOGIC AS YOUR OLD CODE
 # =========================================================
 
 def calculate_risk_score(features):
@@ -1339,7 +1369,10 @@ def calculate_risk_score(features):
     signals = []
 
 
-    if features.get("has_ip", 0) == 1:
+    if features.get(
+        "has_ip",
+        0
+    ) == 1:
 
         score += 25
 
@@ -1348,7 +1381,10 @@ def calculate_risk_score(features):
         )
 
 
-    if features.get("has_at", 0) == 1:
+    if features.get(
+        "has_at",
+        0
+    ) == 1:
 
         score += 20
 
@@ -1462,6 +1498,10 @@ def calculate_risk_score(features):
 
 def analyze_url(url):
 
+    # -----------------------------------------------------
+    # EXTRACT URL FEATURES
+    # -----------------------------------------------------
+
     features = extract_url_features(
         url
     )
@@ -1472,58 +1512,93 @@ def analyze_url(url):
     )
 
 
-    prediction = int(
-        model.predict(
+    # -----------------------------------------------------
+    # GET DOMAIN
+    # -----------------------------------------------------
+
+    parsed_url = urlparse(
+        url
+    )
+
+    domain = (
+        parsed_url.hostname or ""
+    ).lower()
+
+
+    # -----------------------------------------------------
+    # TRUSTED DOMAIN SAFETY LAYER
+    # -----------------------------------------------------
+
+    if domain in TRUSTED_DOMAINS:
+
+        prediction = 0
+
+        phishing_probability = 0.01
+
+        legitimate_probability = 0.99
+
+
+    # -----------------------------------------------------
+    # RANDOM FOREST MODEL
+    # -----------------------------------------------------
+
+    else:
+
+        prediction = int(
+            model.predict(
+                feature_df
+            )[0]
+        )
+
+
+        probabilities = model.predict_proba(
             feature_df
         )[0]
-    )
 
 
-    probabilities = model.predict_proba(
-        feature_df
-    )[0]
-
-
-    classes = list(
-        model.classes_
-    )
-
-
-    class_probabilities = dict(
-        zip(
-            classes,
-            probabilities
+        classes = list(
+            model.classes_
         )
-    )
 
 
-    phishing_probability = float(
-        class_probabilities.get(
-            1,
-            class_probabilities.get(
-                "1",
-                0
+        class_probabilities = dict(
+            zip(
+                classes,
+                probabilities
             )
         )
-    )
 
 
-    legitimate_probability = float(
-        class_probabilities.get(
-            0,
+        phishing_probability = float(
             class_probabilities.get(
-                "0",
-                0
+                1,
+                class_probabilities.get(
+                    "1",
+                    0
+                )
             )
         )
-    )
 
 
-    # =====================================================
-    # OLD FEATURE-BASED RISK SYSTEM
-    # =====================================================
+        legitimate_probability = float(
+            class_probabilities.get(
+                0,
+                class_probabilities.get(
+                    "0",
+                    0
+                )
+            )
+        )
 
-    if isinstance(features, pd.DataFrame):
+
+    # -----------------------------------------------------
+    # RAW FEATURE DICTIONARY
+    # -----------------------------------------------------
+
+    if isinstance(
+        features,
+        pd.DataFrame
+    ):
 
         raw_features = (
             features.iloc[0].to_dict()
@@ -1536,12 +1611,20 @@ def analyze_url(url):
         )
 
 
+    # -----------------------------------------------------
+    # HEURISTIC RISK SCORE
+    # -----------------------------------------------------
+
     risk_score, risk_level, signals = (
         calculate_risk_score(
             raw_features
         )
     )
 
+
+    # -----------------------------------------------------
+    # RETURN RESULT
+    # -----------------------------------------------------
 
     return {
 
@@ -2073,10 +2156,6 @@ def display_analysis_result(
         "🤖 MODEL INFORMATION"
     ):
 
-        # -----------------------------------------------
-        # FEATURE IMPORTANCE GRAPH
-        # -----------------------------------------------
-
         if hasattr(
             model,
             "feature_importances_"
@@ -2113,10 +2192,6 @@ def display_analysis_result(
                 )
             )
 
-
-        # -----------------------------------------------
-        # MODEL DETAILS
-        # -----------------------------------------------
 
         st.write(
             "**Model:** Random Forest"
