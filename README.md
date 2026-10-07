@@ -6,7 +6,7 @@ PhishGuard is an AI-powered phishing URL detection system that uses machine lear
 
 ## 🚀 Live Demo
 
-Streamlit App: https://phishguard-ml-bvatrewbzbd2em8s8zfahw.streamlit.app/
+Streamlit App: https://phishguard-ml-kgpjyez5kci5h3xhqs4azv.streamlit.app/
 
 ## 🎯 Problem
 
